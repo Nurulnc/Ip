@@ -4,8 +4,8 @@ import sqlite3
 
 # --- CONFIGURATION ---
 API_TOKEN = '8387557873:AAGmiQkmKwxdaz7WGbFAzG4vsH7CqT6OVJk'
-ADMIN_ID = 6267675097  # Apnar ID ekhane din
-BKASH_NUMBER = "01815243007" # Apnar bKash number
+ADMIN_ID = 6267675097 
+BKASH_NUMBER = "01815243007" 
 bot = telebot.TeleBot(API_TOKEN)
 
 # --- DATABASE SETUP ---
@@ -88,17 +88,68 @@ def handle_text(message):
         bot.send_message(message.chat.id, f"👤 ইউজার আইডি: `{uid}`\n💵 আপনার বর্তমান ব্যালেন্স: **{balance} টাকা**", parse_mode="Markdown")
 
     elif message.text == "➕ Deposit":
-        deposit_text = (
-            "🏦 **ডিপোজিট করার নিয়ম:**\n\n"
-            f"১. আমাদের bKash Personal নাম্বারে টাকা সেন্ড মানি করুন।\n"
-            f"📱 নাম্বার: `{BKASH_NUMBER}`\n\n"
-            "২. পেমেন্ট করার পর আপনার **ইউজার আইডি** এবং **ট্রানজেকশন আইডি** অ্যাডমিনকে পাঠান।\n\n"
-            f"আপনার আইডি: `{uid}`"
+        deposit_msg = (
+            "🏦 **বিকাশ পেমেন্ট মেথড**\n\n"
+            f"বিকাশ (Personal): `{BKASH_NUMBER}`\n"
+            "টাকা সেন্ড মানি করার পর নিচের ধাপগুলো অনুসরণ করুন।\n\n"
+            "📸 এখন আপনার পেমেন্টের **স্ক্রিনশট** পাঠান।"
         )
-        bot.send_message(message.chat.id, deposit_text, parse_mode="Markdown")
+        msg = bot.send_message(message.chat.id, deposit_msg, parse_mode="Markdown")
+        bot.register_next_step_handler(msg, get_screenshot)
 
     elif message.text == "📞 Support":
         bot.send_message(message.chat.id, "যেকোনো সমস্যায় যোগাযোগ করুন: @Mrchowdhury100")
+
+# --- DEPOSIT FLOW ---
+
+def get_screenshot(message):
+    if message.content_type != 'photo':
+        bot.reply_to(message, "❌ ভুল হয়েছে! দয়া করে পেমেন্টের স্ক্রিনশট (ছবি) পাঠান।")
+        return
+    
+    photo_id = message.photo[-1].file_id
+    msg = bot.reply_to(message, "✅ স্ক্রিনশট পেয়েছি। এখন পেমেন্টের **TrxID (ট্রানজেকশন আইডি)** টি লিখুন।")
+    bot.register_next_step_handler(msg, get_trxid, photo_id)
+
+def get_trxid(message, photo_id):
+    trxid = message.text
+    uid = message.from_user.id
+    user_name = message.from_user.first_name
+
+    # ইউজারকে জানানো
+    bot.send_message(uid, "⏳ আপনার পেমেন্ট রিকোয়েস্ট অ্যাডমিনের কাছে পাঠানো হয়েছে। অ্যাপ্রুভ হওয়া পর্যন্ত অপেক্ষা করুন।")
+
+    # অ্যাডমিনকে জানানো
+    admin_markup = types.InlineKeyboardMarkup()
+    btn_approve = types.InlineKeyboardButton("Approve ✅", callback_data=f"approve_{uid}_{trxid}")
+    btn_reject = types.InlineKeyboardButton("Reject ❌", callback_data=f"reject_{uid}")
+    admin_markup.add(btn_approve, btn_reject)
+
+    admin_info = (
+        "🔔 **নতুন ডিপোজিট রিকোয়েস্ট**\n\n"
+        f"👤 ইউজার: {user_name}\n"
+        f"🆔 আইডি: `{uid}`\n"
+        f"📝 TrxID: `{trxid}`"
+    )
+    bot.send_photo(ADMIN_ID, photo_id, caption=admin_info, reply_markup=admin_markup, parse_mode="Markdown")
+
+# --- CALLBACK HANDLER (ADMIN APPROVAL) ---
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('approve_') or call.data.startswith('reject_'))
+def admin_action(call):
+    data = call.data.split('_')
+    action = data[0]
+    target_uid = int(data[1])
+
+    if action == 'approve':
+        # এখানে কত টাকা অ্যাড করবেন তা ইনপুট নেয়ার সিস্টেম করা যায়, 
+        # তবে আপাতত সিম্পল রাখতে /addtk কমান্ড ব্যবহার করতে পারেন।
+        bot.send_message(ADMIN_ID, f"ইউজার {target_uid} এর পেমেন্ট অ্যাপ্রুভ করতে নিচের কমান্ডটি কপি করে টাকার পরিমাণ লিখে সেন্ড করুন:\n\n`/addtk {target_uid} 50`", parse_mode="Markdown")
+        bot.send_message(target_uid, "✅ আপনার পেমেন্ট রিকোয়েস্ট অ্যাডমিন গ্রহণ করেছেন। কিছুক্ষণের মধ্যেই ব্যালেন্স যোগ হবে।")
+    
+    elif action == 'reject':
+        bot.send_message(target_uid, "❌ দুঃখিত! আপনার পেমেন্ট রিকোয়েস্টটি অ্যাডমিন রিজেক্ট করেছেন। সঠিক তথ্য দিয়ে আবার চেষ্টা করুন।")
+        bot.send_message(ADMIN_ID, f"ইউজার {target_uid} এর রিকোয়েস্ট রিজেক্ট করা হয়েছে।")
 
 # --- ADMIN COMMANDS ---
 
@@ -106,7 +157,6 @@ def handle_text(message):
 def admin_add_tk(message):
     if message.from_user.id == ADMIN_ID:
         try:
-            # Usage: /addtk 12345678 50
             args = message.text.split()
             target_id = int(args[1])
             amount = float(args[2])
