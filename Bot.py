@@ -2,8 +2,8 @@ import telebot
 import sqlite3
 
 # --- CONFIGURATION ---
-API_TOKEN = 'APNAR_BOT_TOKEN_EIKHANE_DIN'
-ADMIN_ID = 123456789  # Apnar nijoeder Telegram User ID ekhane din
+API_TOKEN = '8387557873:AAGmiQkmKwxdaz7WGbFAzG4vsH7CqT6OVJk'
+ADMIN_ID = 6267675097  # Apnar nijoeder Telegram User ID ekhane din
 bot = telebot.TeleBot(API_TOKEN)
 
 # --- DATABASE SETUP ---
